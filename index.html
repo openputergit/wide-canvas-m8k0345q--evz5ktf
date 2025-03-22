@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Vision - Calorie Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .drag-area {
+            border: 2px dashed #3498db;
+            transition: border 0.3s ease;
+        }
+        .drag-area.active {
+            border: 2px solid #3498db;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-3xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold text-gray-800 mb-4">Food Vision</h1>
+                <p class="text-gray-600">Upload a food image to predict its calories</p>
+            </div>
+
+            <!-- Upload Area -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <div class="drag-area flex flex-col items-center justify-center p-8 rounded-lg cursor-pointer">
+                    <i class="bi bi-cloud-upload text-5xl text-blue-500 mb-4"></i>
+                    <h3 class="text-lg font-semibold mb-2">Drag & Drop your food image</h3>
+                    <p class="text-gray-500 text-sm mb-4">OR</p>
+                    <input type="file" id="fileInput" class="hidden" accept="image/png">
+                    <button class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        Browse File
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview and Results -->
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Image Preview -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Image Preview</h3>
+                    <img id="preview" class="w-full h-48 object-cover rounded-lg hidden">
+                    <div class="loader mx-auto mt-4"></div>
+                </div>
+
+                <!-- Results -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Analysis Results</h3>
+                    <div id="results" class="space-y-4">
+                        <p class="text-gray-500">Upload an image to see the results</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dragArea = document.querySelector('.drag-area');
+        const fileInput = document.querySelector('#fileInput');
+        const preview = document.querySelector('#preview');
+        const loader = document.querySelector('.loader');
+        const results = document.querySelector('#results');
+
+        // Trigger file input when clicking the browse button
+        dragArea.addEventListener('click', () => fileInput.click());
+
+        // Handle drag events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, preventDefaults);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dragArea.addEventListener(eventName, () => {
+                dragArea.classList.add('active');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, () => {
+                dragArea.classList.remove('active');
+            });
+        });
+
+        // Handle file drop
+        dragArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            const file = files[0];
+            if (file && file.type === 'image/png') {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    loader.style.display = 'block';
+                    results.innerHTML = '<p class="text-gray-500">Analyzing image...</p>';
+                    
+                    try {
+                        // First upload the file
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('userId', 'user123');
+                        formData.append('appSlug', 'food-vision-123');
+
+                        const uploadResponse = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/storage/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer wXMhVpV4ive7A3GHkcEf6AZUSGI2'
+                            },
+                            body: formData
+                        });
+
+                        const uploadData = await uploadResponse.json();
+
+                        // Then analyze with AI
+                        const aiResponse = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/ai', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer wXMhVpV4ive7A3GHkcEf6AZUSGI2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messages: [{
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: "What food item is this? Please analyze this food image and predict its approximate calories per serving."
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: {
+                                                url: uploadData.url
+                                            }
+                                        }
+                                    ]
+                                }]
+                            })
+                        });
+
+                        const aiData = await aiResponse.json();
+                        
+                        // Display results
+                        results.innerHTML = `
+                            <div class="space-y-4">
+                                <p class="text-gray-700">${aiData.message}</p>
+                            </div>
+                        `;
+                    } catch (error) {
+                        results.innerHTML = `
+                            <div class="text-red-500">
+                                <p>Error analyzing image. Please try again.</p>
+                            </div>
+                        `;
+                    } finally {
+                        loader.style.display = 'none';
+                    }
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('Please upload a PNG image file');
+            }
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
